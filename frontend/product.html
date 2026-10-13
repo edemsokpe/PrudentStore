@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Product | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap" id="page"><div class="empty">Loading product…</div></main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("");
+const slug = new URLSearchParams(location.search).get("slug");
+
+async function initReviews(p) {
+  const box = $("#reviews");
+  let page = 1, items = [], summary = null, mine = null;
+  const nextUrl = encodeURIComponent("product.html?slug=" + p.slug);
+  const date = (d) => new Date(d).toLocaleDateString("en-GH", { day: "numeric", month: "short", year: "numeric" });
+
+  async function load(reset) {
+    if (reset) { page = 1; items = []; }
+    const d = await api(`/reviews/product/${encodeURIComponent(p.slug)}?page=${page}&size=10`);
+    summary = d; items = items.concat(d.items);
+    draw();
+  }
+
+  function draw() {
+    const s = summary;
+    box.innerHTML = `
+      <div class="sec-head"><h2>Customer reviews</h2></div>
+      <div class="info-card">
+        ${s.count ? `<div class="rev-sum">
+          <div class="rev-avg"><div class="big">${s.avg.toFixed(1)}</div>${starsBar(s.avg)}<div class="meta" style="margin:4px 0 0">${s.count} review${s.count === 1 ? "" : "s"}</div></div>
+          <div class="rev-bars">${[5, 4, 3, 2, 1].map((n) => `<div class="bar-row"><span>${n}★</span><div class="bar"><i style="width:${s.count ? (s.distribution[n] / s.count) * 100 : 0}%"></i></div><span>${s.distribution[n]}</span></div>`).join("")}</div>
+        </div>` : '<div class="meta" style="margin:0">No reviews yet.</div>'}
+        <div id="myRev" style="margin-top:14px"></div>
+        <div id="revList">${items.map((r) => `
+          <article class="rev">
+            <div class="rev-top">${starsBar(r.rating)}<span class="meta" style="margin:0">${esc(r.author)} · ${date(r.created_at)}</span></div>
+            ${r.title ? `<b>${esc(r.title)}</b>` : ""}
+            ${r.body ? `<p>${esc(r.body)}</p>` : ""}
+            ${r.verified_purchase ? '<span class="tag" style="margin:0">Verified purchase</span>' : ""}
+          </article>`).join("")}</div>
+        ${items.length < s.total ? '<button class="more" id="moreRev">Show more reviews</button>' : ""}
+      </div>`;
+    const more = $("#moreRev"); if (more) more.onclick = () => { page++; load(false); };
+    drawMine();
+  }
+
+  async function drawMine() {
+    const el = $("#myRev");
+    if (!Auth.isIn()) { el.innerHTML = `<a class="link-btn" href="login.html?next=${nextUrl}">Log in to review this product</a>`; return; }
+    try { mine = await api("/reviews/mine/" + p.id); } catch { return; }
+    if (!mine.can_review) { el.innerHTML = '<div class="meta" style="margin:0">Only customers who have received this product can review it.</div>'; return; }
+    el.innerHTML = `<button class="btn-outline" id="openRev">${mine.review ? "Edit your review" : "Write a review"}</button>`;
+    $("#openRev").onclick = form;
+    if (location.hash === "#reviews-write") { form(); $("#reviews").scrollIntoView(); }
+  }
+
+  function form() {
+    const r = mine.review;
+    const el = $("#myRev");
+    el.innerHTML = `
+      <form class="form rev-form" id="revForm" novalidate>
+        <div class="field"><label id="rl">Your rating</label>
+          <div class="star-input" role="radiogroup" aria-labelledby="rl">${[1, 2, 3, 4, 5].map((n) => `<input class="sr" type="radio" name="rating" id="st${n}" value="${n}" ${r && r.rating === n ? "checked" : ""}><label for="st${n}" title="${n} star${n === 1 ? "" : "s"}"><span class="sr">${n} star${n === 1 ? "" : "s"}</span>★</label>`).join("")}</div></div>
+        <div class="field"><label for="rvT">Title (optional)</label><input id="rvT" maxlength="150" value="${esc(r?.title || "")}"></div>
+        <div class="field"><label for="rvB">Your review (optional)</label><textarea id="rvB" maxlength="2000" rows="4" style="width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--pt-border);background:var(--pt-white);color:var(--pt-text)">${esc(r?.body || "")}</textarea></div>
+        <div class="form-msg" id="rvMsg" role="alert"></div>
+        <div class="row-btns" style="margin:0"><button class="btn-primary" type="submit">${r ? "Save review" : "Post review"}</button>${r ? '<button class="btn-danger" type="button" id="delRev">Delete</button>' : ""}</div>
+      </form>`;
+    const paint = () => { const v = +(document.querySelector("input[name=rating]:checked")?.value || 0); document.querySelectorAll(".star-input label").forEach((l, i) => l.classList.toggle("on", i < v)); };
+    document.querySelectorAll("input[name=rating]").forEach((i) => (i.onchange = paint)); paint();
+    $("#revForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const rating = +(document.querySelector("input[name=rating]:checked")?.value || 0);
+      const msg = $("#rvMsg");
+      if (!rating) { msg.className = "form-msg err"; msg.textContent = "Choose a star rating"; return; }
+      try {
+        await api("/reviews/product/" + p.id, { method: "POST", body: { rating, title: $("#rvT").value, body: $("#rvB").value } });
+        toast("Review saved"); await load(true);
+      } catch (er) { msg.className = "form-msg err"; msg.textContent = er.message; }
+    };
+    const del = $("#delRev");
+    if (del) del.onclick = async () => { if (!confirm("Delete your review?")) return; try { await api("/reviews/mine/" + p.id, { method: "DELETE" }); toast("Review deleted"); await load(true); } catch (er) { toast(er.message); } };
+  }
+
+  try { await load(true); } catch { box.innerHTML = ""; }
+}
+
+(async function () {
+  const page = $("#page");
+  if (!slug) { page.innerHTML = '<div class="empty">No product selected. <a class="link-btn" href="index.html">Go to the store</a></div>'; return; }
+  let p;
+  try { p = await api("/products/" + encodeURIComponent(slug)); }
+  catch { page.innerHTML = '<div class="empty">This product was not found. <a class="link-btn" href="index.html">Back to the store</a></div>'; return; }
+
+  document.title = p.name + " | PRUDENT TECH Store";
+  const out = p.stock < 1;
+  const specs = Object.entries(p.specs || {});
+  const imgs = p.images || [];
+  window.__products[p.id] = p;
+
+  page.innerHTML = `
+    <div class="crumbs"><a href="index.html">Home</a>${p.category ? ` / <a href="index.html?category=${p.category.id}">${esc(p.category.name)}</a>` : ""}</div>
+    <div class="pdp">
+      <div class="gallery">
+        <div class="main" id="mainImg">${imgs[0] ? `<img src="${esc(imgs[0].url)}" alt="${esc(p.name)}">` : initials(p.name)}</div>
+        ${imgs.length > 1 ? `<div class="thumbs">${imgs.map((im, i) => `<button class="${i ? "" : "on"}" data-i="${i}" aria-label="Show image ${i + 1}"><img src="${esc(im.url)}" alt=""></button>`).join("")}</div>` : ""}
+      </div>
+      <div>
+        <div class="info-card">
+          <h1>${esc(p.name)}</h1>
+          <div class="meta">${p.brand ? "Brand: " + esc(p.brand.name) : ""}${p.brand && p.rating_count ? " · " : ""}${p.rating_count ? `<a href="#reviews" style="display:inline-flex;gap:6px;align-items:center">${starsBar(p.rating_avg)} <span>${Number(p.rating_avg).toFixed(1)} (${p.rating_count} review${p.rating_count === 1 ? "" : "s"})</span></a>` : ""}</div>
+          <div><span class="price">${money(p.price)}</span>${p.discount_percent ? `<span class="old">${money(p.old_price)}</span><span class="badge-discount">-${p.discount_percent}%</span>` : ""}</div>
+          ${p.flash ? `<div class="flash-banner"><span><b>Flash sale</b> · ends in <b id="pcd" role="timer"></b></span>${p.flash.remaining != null ? `<span>${p.flash.remaining} left at this price</span>` : ""}</div>` : ""}
+          <div class="stock-note ${out ? "out" : ""}" style="margin-top:8px;font-size:13px">${out ? "Out of stock" : p.stock <= 5 ? "Only " + p.stock + " left" : "In stock"}</div>
+          <div class="buy-row">
+            <div class="qty"><button id="dec" aria-label="Decrease quantity">−</button><b id="q">1</b><button id="inc" aria-label="Increase quantity">+</button></div>
+            <button class="wish-btn" data-wish="${p.id}" aria-pressed="false">${ICON.heart}<span>Save</span></button>
+            <button class="btn-primary" id="addBtn" ${out ? "disabled" : ""}>${out ? "Out of stock" : "Add to cart"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${p.description ? `<section><div class="sec-head"><h2>Description</h2></div><div class="info-card desc">${esc(p.description)}</div></section>` : ""}
+    ${specs.length ? `<section><div class="sec-head"><h2>Specifications</h2></div><div class="info-card" style="padding:0;overflow:hidden"><table class="specs">${specs.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table></div></section>` : ""}
+    <section id="reviews"></section>
+    <section id="related" hidden><div class="sec-head"><h2>You may also like</h2></div><div class="grid" id="relGrid"></div></section>`;
+
+  document.querySelectorAll(".thumbs button").forEach((b) => (b.onclick = () => {
+    $("#mainImg").innerHTML = `<img src="${esc(imgs[+b.dataset.i].url)}" alt="${esc(p.name)}">`;
+    document.querySelectorAll(".thumbs button").forEach((x) => x.classList.toggle("on", x === b));
+  }));
+
+  let qty = 1;
+  const cap = p.flash && p.flash.remaining != null ? Math.min(p.stock, p.flash.remaining) : p.stock;
+  $("#inc").onclick = () => { qty = Math.min(qty + 1, cap || 1); $("#q").textContent = qty; };
+  $("#dec").onclick = () => { qty = Math.max(qty - 1, 1); $("#q").textContent = qty; };
+  $("#addBtn").onclick = () => Cart.add(p, qty);
+  initReviews(p);
+  if (p.flash && $("#pcd")) startCountdown($("#pcd"), p.flash.ends_at, new Date(p.flash.now).getTime() - Date.now(), () => location.reload());
+
+  if (p.category) {
+    try {
+      const r = await api(`/products?category_id=${p.category.id}&size=6`);
+      const others = r.items.filter((x) => x.id !== p.id).slice(0, 5);
+      if (others.length) { $("#related").hidden = false; $("#relGrid").innerHTML = others.map(productCard).join(""); }
+    } catch {}
+  }
+})();
+</script>
+</body>
+</html>

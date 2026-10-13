@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+<title>Forgot password | PRUDENT TECH Store</title>
+</head>
+<body>
+<main class="wrap">
+  <div class="narrow info-card">
+    <h2 style="margin:0 0 6px;font-size:20px">Forgot your password?</h2>
+    <p class="meta">Enter your email and we will send you a link to choose a new one.</p>
+    <form class="form" id="fForm" novalidate>
+      <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" autocomplete="email" required></div>
+      <div class="form-msg" id="fMsg" role="alert"></div>
+      <button class="btn-primary" type="submit">Send reset link</button>
+    </form>
+    <div id="done" hidden>
+      <div class="warn">If an account exists for that email, a reset link is on its way. It works for 30 minutes. Check your spam folder if you do not see it.</div>
+    </div>
+    <p style="margin:14px 0 0"><a class="link-btn" href="login.html">Back to log in</a></p>
+  </div>
+</main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("account");
+const qEmail = new URLSearchParams(location.search).get("email");
+if (qEmail) $("#fEmail").value = qEmail;
+$("#fForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const msg = $("#fMsg"), btn = e.target.querySelector("button");
+  msg.className = "form-msg"; msg.textContent = "";
+  if (!$("#fEmail").value.trim()) { msg.className = "form-msg err"; msg.textContent = "Enter your email address"; return; }
+  btn.disabled = true;
+  try {
+    await api("/auth/forgot", { method: "POST", body: { email: $("#fEmail").value } });
+    e.target.hidden = true; $("#done").hidden = false;
+  } catch (er) {
+    msg.className = "form-msg err";
+    msg.textContent = er.message === "Failed to fetch" ? "Cannot reach the server. Check your connection and try again." : er.message;
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

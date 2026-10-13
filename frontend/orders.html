@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>My orders | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap"><div class="narrow" style="max-width:680px">
+  <div class="sec-head"><h2>My orders</h2><a href="account.html">My account</a></div>
+  <div id="list"><div class="empty">Loading…</div></div>
+</div></main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("account");
+if (!Auth.isIn()) location.replace("login.html?next=orders.html");
+(async () => {
+  try {
+    const orders = await api("/orders");
+    $("#list").innerHTML = orders.length ? orders.map((o) => `
+      <a class="info-card ocard" href="order.html?no=${encodeURIComponent(o.order_no)}">
+        <div class="top"><b>${esc(o.order_no)}</b><span class="status ${o.status}">${STATUS[o.status] || esc(o.status)}</span></div>
+        <div class="meta" style="margin:0">${fmtDate(o.created_at)} · ${o.items.reduce((n, i) => n + i.quantity, 0)} item(s) · <b style="color:var(--pt-text)">${money(o.total)}</b></div>
+        <div class="thumbs-mini">${o.items.slice(0, 5).map((i) => `<span>${i.image_url ? `<img src="${esc(i.image_url)}" alt="">` : initials(i.name)}</span>`).join("")}</div>
+      </a>`).join("") : '<div class="empty">You have not placed any orders yet.<br><a class="link-btn" href="index.html">Start shopping</a></div>';
+  } catch (e) { $("#list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+})();
+</script>
+</body>
+</html>

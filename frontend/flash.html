@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Flash sale | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap" id="page"><div class="empty">Loading…</div></main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("home");
+(async () => {
+  const page = $("#page");
+  try {
+    const d = await api("/flash");
+    const off = new Date(d.server_time).getTime() - Date.now();
+    if (!d.active.length) {
+      page.innerHTML = '<div class="empty">No flash sale is running right now.<br><a class="link-btn" href="index.html">Back to the store</a></div>';
+      if (d.upcoming) {
+        page.insertAdjacentHTML("afterbegin", `<div class="teaser" style="margin-top:14px">Next flash sale: <b>${esc(d.upcoming.title)}</b> starts in <b class="cd" id="up" role="timer"></b></div>`);
+        startCountdown($("#up"), d.upcoming.starts_at, off, () => location.reload());
+      }
+      return;
+    }
+    page.innerHTML = d.active.map((s, n) => `
+      <section>
+        <div class="flash-box" style="padding-right:14px;padding-bottom:16px">
+          <div class="sec-head"><h2>${esc(s.title)}</h2><div class="cd-wrap">Ends in <b class="cd" id="cd${n}" role="timer"></b></div></div>
+          <div class="grid" style="padding-right:0">${s.items.map(productCard).join("")}</div>
+        </div>
+      </section>`).join("");
+    d.active.forEach((s, n) => startCountdown($("#cd" + n), s.ends_at, off, () => location.reload()));
+  } catch (e) { page.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+})();
+</script>
+</body>
+</html>

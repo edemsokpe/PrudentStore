@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>My account | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="narrow stack" style="max-width:640px" id="acct">
+    <div class="sec-head"><h2 id="hello">My account</h2><button class="link-btn" id="logout">Log out</button></div>
+
+    <div class="info-card" id="installCard" hidden><div class="sec-head"><h2 style="font-size:16px">Install the app</h2><button class="link-btn" id="installBtn">Install</button></div><div class="meta" style="margin:0" id="installMsg">Add PRUDENT TECH to your home screen for faster shopping.</div></div>
+
+    <div class="info-card"><div class="sec-head"><h2 style="font-size:16px">My orders</h2><a href="orders.html">View all</a></div><div class="meta" style="margin:0">Track, pay for or cancel your orders.</div></div>
+
+    <div class="info-card"><div class="sec-head"><h2 style="font-size:16px">Saved items</h2><a href="wishlist.html">View all</a></div><div class="meta" style="margin:0">Products you saved with the heart icon.</div></div>
+
+    <div class="info-card">
+      <div class="sec-head"><h2 style="font-size:16px">Profile</h2></div>
+      <form class="form" id="profForm">
+        <div class="field"><label for="pEmail">Email</label><input id="pEmail" readonly></div>
+        <div class="field"><label for="pName">Full name</label><input id="pName" required></div>
+        <div class="field"><label for="pPhone">Phone</label><input id="pPhone" type="tel"></div>
+        <div class="form-msg" id="pMsg" role="status"></div>
+        <button class="btn-primary" type="submit">Save changes</button>
+      </form>
+    </div>
+
+    <div class="info-card" id="addresses">
+      <div class="sec-head"><h2 style="font-size:16px">Delivery addresses</h2></div>
+      <div id="addrList"></div>
+      <form class="form" id="addrForm" style="margin-top:14px">
+        <div class="cols-2">
+          <div class="field"><label for="aName">Full name</label><input id="aName" required></div>
+          <div class="field"><label for="aPhone">Phone</label><input id="aPhone" type="tel" required></div>
+          <div class="field"><label for="aRegion">Region</label><select id="aRegion" required></select></div>
+          <div class="field"><label for="aCity">City or town</label><input id="aCity" required></div>
+        </div>
+        <div class="field"><label for="aStreet">Street, house number or landmark</label><input id="aStreet" required></div>
+        <label style="font-size:14px;display:flex;gap:8px;align-items:center"><input type="checkbox" id="aDef"> Use as my default address</label>
+        <div class="form-msg" id="aMsg" role="status"></div>
+        <button class="btn-outline" type="submit">Add address</button>
+      </form>
+    </div>
+
+    <div class="info-card">
+      <div class="sec-head"><h2 style="font-size:16px">Change password</h2></div>
+      <form class="form" id="pwForm">
+        <div class="field"><label for="cPw">Current password</label><input id="cPw" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="nPw">New password (8 characters or more)</label><input id="nPw" type="password" autocomplete="new-password" minlength="8" required></div>
+        <div class="form-msg" id="wMsg" role="status"></div>
+        <button class="btn-outline" type="submit">Update password</button>
+      </form>
+    </div>
+  </div>
+</main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("account");
+if (!Auth.isIn()) location.replace("login.html?next=account.html");
+
+const REGIONS = ["Greater Accra","Ashanti","Western","Western North","Central","Eastern","Volta","Oti","Northern","Savannah","North East","Upper East","Upper West","Bono","Bono East","Ahafo"];
+$("#aRegion").innerHTML = '<option value="">Choose a region</option>' + REGIONS.map((r) => `<option>${r}</option>`).join("");
+$("#logout").onclick = () => Auth.logout();
+
+function msg(el, text, err) { el.className = "form-msg " + (err ? "err" : "ok"); el.textContent = text; }
+
+async function loadProfile() {
+  try {
+    const u = await api("/auth/me");
+    Auth.set(Auth.token(), u);
+    $("#hello").textContent = "Hi, " + u.full_name.split(" ")[0];
+    $("#pEmail").value = u.email; $("#pName").value = u.full_name; $("#pPhone").value = u.phone || "";
+  } catch { location.replace("login.html?next=account.html"); }
+}
+$("#profForm").onsubmit = async (e) => {
+  e.preventDefault();
+  try { const u = await api("/auth/me", { method: "PUT", body: { full_name: $("#pName").value, phone: $("#pPhone").value || null } }); Auth.set(Auth.token(), u); $("#hello").textContent = "Hi, " + u.full_name.split(" ")[0]; msg($("#pMsg"), "Profile saved"); }
+  catch (er) { msg($("#pMsg"), er.message, true); }
+};
+
+async function loadAddresses() {
+  const box = $("#addrList");
+  try {
+    const list = await api("/me/addresses");
+    box.innerHTML = list.length ? list.map((a) => `
+      <div class="addr">
+        <b>${esc(a.full_name)}</b>${a.is_default ? '<span class="tag">Default</span>' : ""}<br>
+        ${esc(a.street)}, ${esc(a.city)}, ${esc(a.region)}<br>${esc(a.phone)}
+        <div class="actions">
+          ${a.is_default ? "" : `<button class="link-btn" data-def="${a.id}">Make default</button>`}
+          <button class="link-btn" data-del="${a.id}" style="color:#b3261e">Delete</button>
+        </div>
+      </div>`).join("") : '<div class="empty" style="padding:10px 0">No saved addresses yet. Add one below.</div>';
+    box.querySelectorAll("[data-def]").forEach((b) => (b.onclick = async () => { await api(`/me/addresses/${b.dataset.def}/default`, { method: "POST" }); loadAddresses(); }));
+    box.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => { if (confirm("Delete this address?")) { await api(`/me/addresses/${b.dataset.del}`, { method: "DELETE" }); loadAddresses(); } }));
+  } catch (er) { box.innerHTML = `<div class="form-msg err">${esc(er.message)}</div>`; }
+}
+$("#addrForm").onsubmit = async (e) => {
+  e.preventDefault();
+  if (!$("#aRegion").value) return msg($("#aMsg"), "Choose a region", true);
+  try {
+    await api("/me/addresses", { method: "POST", body: { full_name: $("#aName").value, phone: $("#aPhone").value, region: $("#aRegion").value, city: $("#aCity").value, street: $("#aStreet").value, is_default: $("#aDef").checked } });
+    e.target.reset(); msg($("#aMsg"), "Address added"); loadAddresses();
+  } catch (er) { msg($("#aMsg"), er.message, true); }
+};
+
+$("#pwForm").onsubmit = async (e) => {
+  e.preventDefault();
+  try { const r = await api("/auth/change-password", { method: "POST", body: { current_password: $("#cPw").value, new_password: $("#nPw").value } }); if (r.access_token) Auth.set(r.access_token, Auth.user()); e.target.reset(); msg($("#wMsg"), "Password updated. Other devices were logged out."); }
+  catch (er) { msg($("#wMsg"), er.message, true); }
+};
+
+loadProfile(); loadAddresses();
+</script>
+</body>
+</html>

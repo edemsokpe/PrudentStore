@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap">
+  <section id="bannerSec"></section>
+  <section id="categories"><div class="sec-head"><h2>Shop by category</h2></div><div class="cat-row" id="catRow"></div></section>
+  <section id="flashSec" hidden></section>
+  <section id="dealsSec" hidden>
+    <div class="deals-box">
+      <div class="sec-head"><h2>Top deals</h2><a href="index.html?sale=1">See all</a></div>
+      <div class="h-scroll" id="deals"></div>
+    </div>
+  </section>
+  <section id="listSec">
+    <div class="sec-head"><h2 id="listTitle">All products</h2></div>
+    <div class="toolbar">
+      <select id="sort" aria-label="Sort by">
+        <option value="newest">Newest</option>
+        <option value="price_asc">Price: low to high</option>
+        <option value="price_desc">Price: high to low</option>
+        <option value="discount">Biggest discount</option>
+        <option value="rating">Top rated</option>
+      </select>
+      <input id="minP" type="number" min="0" inputmode="numeric" placeholder="Min GH₵" aria-label="Minimum price">
+      <input id="maxP" type="number" min="0" inputmode="numeric" placeholder="Max GH₵" aria-label="Maximum price">
+      <select id="stockSel" aria-label="Availability"><option value="">Any availability</option><option value="1">In stock only</option></select>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="msg" hidden></div>
+    <button class="more" id="more" hidden>Load more</button>
+  </section>
+</main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("home");
+const params = new URLSearchParams(location.search);
+const state = { q: params.get("q") || "", category: params.get("category") || "", sale: params.get("sale") === "1", page: 1 };
+const filtering = state.q || state.category || state.sale;
+let cats = [];
+
+/* banners */
+async function loadBanners() {
+  const sec = $("#bannerSec");
+  if (filtering) { sec.hidden = true; return; }
+  let list = [];
+  try { list = await api("/banners"); } catch {}
+  if (!list.length) {
+    sec.innerHTML = '<div class="banners"><div class="hero-fallback"><h1>Phones, laptops and accessories</h1><p>Genuine products, delivered to you.</p></div></div>';
+    return;
+  }
+  sec.innerHTML = `<div class="banners"><div class="banner-track" id="track">${list.map((b) =>
+    `<a href="${esc(b.link || "#")}"><img src="${esc(b.image_url)}" alt="${esc(b.title)}"></a>`).join("")}</div>
+    <div class="dots" id="dots">${list.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div></div>`;
+  const track = $("#track"), dots = [...document.querySelectorAll("#dots i")];
+  track.addEventListener("scroll", () => {
+    const i = Math.round(track.scrollLeft / track.clientWidth);
+    dots.forEach((d, n) => d.classList.toggle("on", n === i));
+  }, { passive: true });
+  if (list.length > 1 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setInterval(() => {
+      const next = (Math.round(track.scrollLeft / track.clientWidth) + 1) % list.length;
+      track.scrollTo({ left: next * track.clientWidth, behavior: "smooth" });
+    }, 5000);
+  }
+}
+
+/* categories */
+async function loadCategories() {
+  try { cats = await api("/categories"); } catch { cats = []; }
+  $("#catRow").innerHTML = cats.length ? cats.map((c) => `
+    <a class="cat ${String(c.id) === state.category ? "on" : ""}" href="index.html?category=${c.id}">
+      <div class="bubble">${c.image_url ? `<img src="${esc(c.image_url)}" alt="">` : initials(c.name)}</div><span>${esc(c.name)}</span>
+    </a>`).join("") : '<div class="empty" style="padding:8px 0">No categories yet.</div>';
+  if (state.category) {
+    const c = cats.find((x) => String(x.id) === state.category);
+    if (c) $("#listTitle").textContent = c.name;
+  }
+}
+
+/* flash sale */
+async function loadFlash() {
+  if (filtering) return;
+  try {
+    const d = await api("/flash");
+    const off = new Date(d.server_time).getTime() - Date.now();
+    const sec = $("#flashSec");
+    if (d.active.length) {
+      const s = d.active[0];
+      sec.hidden = false;
+      sec.innerHTML = `<div class="flash-box"><div class="sec-head"><h2>${esc(s.title)}</h2><div class="cd-wrap">Ends in <b class="cd" id="flashCd" role="timer"></b></div></div>
+        <div class="h-scroll">${s.items.map(productCard).join("")}</div><a class="flash-all" href="flash.html">See all flash deals</a></div>`;
+      startCountdown($("#flashCd"), s.ends_at, off, () => location.reload());
+    } else if (d.upcoming) {
+      sec.hidden = false;
+      sec.innerHTML = `<div class="teaser">Next flash sale: <b>${esc(d.upcoming.title)}</b> starts in <b class="cd" id="flashCd" role="timer"></b></div>`;
+      startCountdown($("#flashCd"), d.upcoming.starts_at, off, () => location.reload());
+    }
+  } catch {}
+}
+
+/* deals */
+async function loadDeals() {
+  if (filtering) return;
+  try {
+    const d = await api("/products?on_sale=true&sort=discount&size=10");
+    if (!d.items.length) return;
+    $("#dealsSec").hidden = false;
+    $("#deals").innerHTML = d.items.map(productCard).join("");
+  } catch {}
+}
+
+/* listing */
+function query(page) {
+  const p = new URLSearchParams({ page, size: 20, sort: $("#sort").value });
+  if (state.q) p.set("q", state.q);
+  if (state.category) p.set("category_id", state.category);
+  if (state.sale) p.set("on_sale", "true");
+  if ($("#minP").value) p.set("min_price", $("#minP").value);
+  if ($("#maxP").value) p.set("max_price", $("#maxP").value);
+  if ($("#stockSel").value) p.set("in_stock", "true");
+  return "/products?" + p;
+}
+async function loadProducts(reset) {
+  if (reset) { state.page = 1; $("#grid").innerHTML = Array(6).fill('<div class="skeleton"></div>').join(""); }
+  $("#msg").hidden = true; $("#more").hidden = true;
+  try {
+    const d = await api(query(state.page));
+    if (reset) $("#grid").innerHTML = "";
+    $("#grid").insertAdjacentHTML("beforeend", d.items.map(productCard).join(""));
+    if (!d.items.length && reset) {
+      $("#msg").hidden = false;
+      $("#msg").textContent = state.q ? `No products match "${state.q}". Try a different word.` : "No products here yet. Check back soon.";
+    }
+    $("#more").hidden = state.page * d.size >= d.total;
+  } catch (e) {
+    $("#grid").innerHTML = "";
+    $("#msg").hidden = false;
+    $("#msg").textContent = "Could not load products. Check that the API is running at " + API + ".";
+  }
+}
+if (state.q) $("#listTitle").textContent = `Results for "${state.q}"`;
+if (state.sale) $("#listTitle").textContent = "Top deals";
+["sort", "minP", "maxP", "stockSel"].forEach((id) => $("#" + id).addEventListener("change", () => loadProducts(true)));
+$("#more").onclick = () => { state.page++; loadProducts(false); };
+
+loadBanners(); loadCategories(); loadFlash(); loadDeals(); loadProducts(true);
+</script>
+</body>
+</html>

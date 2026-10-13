@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Order | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap"><div class="narrow stack" style="max-width:680px" id="page"><div class="empty">Loading order…</div></div></main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("account");
+const params = new URLSearchParams(location.search);
+const no = params.get("no");
+const ref = params.get("reference") || params.get("trxref");
+if (!Auth.isIn()) location.replace("login.html?next=" + encodeURIComponent("order.html?no=" + (no || "")));
+
+const STEPS = [["placed", "Placed"], ["packed", "Packed"], ["shipped", "Shipped"], ["delivered", "Delivered"]];
+const PAY_LABEL = { pay_on_delivery: "Pay on delivery", paystack: "Mobile Money or card" };
+const PAY_STATUS = { pending: "Not paid yet", paid: "Paid", failed: "Failed", refund_needed: "Refund in progress", refunded: "Refunded" };
+
+async function load(notice) {
+  clearInterval(window.__dl);
+  const page = $("#page");
+  let o;
+  try { o = await api("/orders/" + encodeURIComponent(no)); }
+  catch (e) { page.innerHTML = `<div class="empty">${esc(e.message)}<br><a class="link-btn" href="orders.html">My orders</a></div>`; return; }
+
+  const pay = o.payments[o.payments.length - 1];
+  const idx = STEPS.findIndex((s) => s[0] === o.status);
+  let banner = notice || "";
+  if (!banner && o.status === "awaiting_payment") banner = '<div class="warn" id="deadline">This order is waiting for payment. Pay now to confirm it.</div>';
+  if (!banner && o.status === "cancelled") banner = '<div class="warn">This order was cancelled.</div>';
+  const canCancel = ["awaiting_payment", "placed"].includes(o.status) && !o.payments.some((p) => p.status === "paid");
+
+  page.innerHTML = `
+    ${banner}
+    <div class="info-card">
+      <div class="sec-head"><h2 style="font-size:18px">Order ${esc(o.order_no)}</h2><span class="status ${o.status}">${STATUS[o.status] || esc(o.status)}</span></div>
+      <div class="meta">Placed on ${fmtDate(o.created_at)}</div>
+      ${idx >= 0 ? `<div class="track">${STEPS.map((s, n) => `<div class="${n <= idx ? "done" : ""}">${s[1]}</div>`).join("")}</div>` : ""}
+      <div class="row-btns">
+        ${o.status === "awaiting_payment" ? '<button class="btn-primary" id="payNow">Pay now</button>' : ""}
+        ${canCancel ? '<button class="btn-danger" id="cancel">Cancel order</button>' : ""}
+      </div>
+      <div class="form-msg err" id="actMsg" role="alert" style="margin-top:8px"></div>
+    </div>
+    <div class="info-card">
+      <h2 style="font-size:16px;margin:0 0 6px">Items</h2>
+      ${o.items.map((i) => `<div class="line"><div class="thumb">${i.image_url ? `<img src="${esc(i.image_url)}" alt="">` : initials(i.name)}</div><div class="grow">${esc(i.name)}<div class="meta" style="margin:2px 0 0">Qty ${i.quantity} × ${money(i.unit_price)}</div>${o.status === "delivered" && i.product_slug ? `<a class="link-btn" href="product.html?slug=${encodeURIComponent(i.product_slug)}#reviews-write">Rate this product</a>` : ""}</div><b>${money(i.unit_price * i.quantity)}</b></div>`).join("")}
+      <div style="margin-top:8px">
+        <div class="sum-row"><span>Subtotal</span><span>${money(o.subtotal)}</span></div>
+        ${+o.discount ? `<div class="sum-row disc"><span>Coupon ${esc(o.coupon_code || "")}</span><span>-${money(o.discount)}</span></div>` : ""}
+        <div class="sum-row"><span>Delivery</span><span>${money(o.delivery_fee)}</span></div>
+        <div class="sum-row total"><span>Total</span><span>${money(o.total)}</span></div>
+      </div>
+    </div>
+    <div class="info-card">
+      <h2 style="font-size:16px;margin:0 0 6px">Delivery</h2>
+      <div style="font-size:14px;line-height:1.55">${esc(o.ship_name)}<br>${esc(o.ship_street)}, ${esc(o.ship_city)}, ${esc(o.ship_region)}<br>${esc(o.ship_phone)}</div>
+      ${pay ? `<h2 style="font-size:16px;margin:14px 0 6px">Payment</h2><div style="font-size:14px">${PAY_LABEL[pay.method] || esc(pay.method)}: <b>${PAY_STATUS[pay.status] || esc(pay.status)}</b></div>` : ""}
+    </div>
+    <div style="text-align:center"><a class="link-btn" href="orders.html">All my orders</a></div>`;
+
+  if (o.status === "awaiting_payment" && o.pay_by && $("#deadline")) {
+    const tick = () => {
+      const mins = Math.ceil((new Date(o.pay_by) - Date.now()) / 60000);
+      $("#deadline").textContent = mins > 0
+        ? `Pay within ${mins} minute${mins === 1 ? "" : "s"} or this order is cancelled automatically and the items go back on sale.`
+        : "Time is almost up. If you have already paid, refresh this page in a minute. Otherwise this order will be cancelled shortly.";
+    };
+    tick(); window.__dl = setInterval(tick, 30000);
+  }
+  const msg = $("#actMsg");
+  const payBtn = $("#payNow");
+  if (payBtn) payBtn.onclick = async () => {
+    payBtn.disabled = true; msg.textContent = "";
+    try { const r = await api("/orders/" + encodeURIComponent(no) + "/pay", { method: "POST" }); location.href = r.payment_url; }
+    catch (e) { msg.textContent = e.message; payBtn.disabled = false; }
+  };
+  const cancelBtn = $("#cancel");
+  if (cancelBtn) cancelBtn.onclick = async () => {
+    if (!confirm("Cancel this order?")) return;
+    try { await api("/orders/" + encodeURIComponent(no) + "/cancel", { method: "POST" }); load(); }
+    catch (e) { msg.textContent = e.message; }
+  };
+}
+
+(async () => {
+  if (!no) { $("#page").innerHTML = '<div class="empty">No order selected.<br><a class="link-btn" href="orders.html">My orders</a></div>'; return; }
+  let notice = "";
+  if (ref) {
+    try {
+      const r = await api("/payments/paystack/verify?reference=" + encodeURIComponent(ref));
+      notice = r.payment_status === "paid" ? '<div class="warn">Payment received. Thank you! Your order is confirmed.</div>'
+        : '<div class="warn">Your payment did not go through. You can try again with Pay now.</div>';
+    } catch (e) { notice = `<div class="warn">${esc(e.message)}</div>`; }
+    history.replaceState(null, "", "order.html?no=" + encodeURIComponent(no));
+  } else if (params.get("placed")) {
+    notice = '<div class="warn">Order placed. Thank you! Pay when your order arrives.</div>';
+  }
+  load(notice);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# Optional Render Blueprint: one web service that serves both the store (frontend/) and the API.
+# You can also create the service by hand in the Render dashboard with the same commands (see DEPLOY.md).
+services:
+  - type: web
+    name: prudent-tech-store
+    runtime: python
+    plan: free            # change to "starter" so the shop never goes to sleep
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL        # Neon connection string
+        sync: false
+      - key: FRONTEND_URL        # your live address, e.g. https://prudent-tech-store.onrender.com
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: ARKESEL_API_KEY
+        sync: false
+      - key: SMS_SENDER_ID
+        value: PRUDENTTECH
+      - key: ADMIN_NOTIFY_EMAIL
+        sync: false
+      - key: ADMIN_NOTIFY_PHONE
+        sync: false

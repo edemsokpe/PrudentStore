@@ -1,0 +1,25 @@
+/* PRUDENT TECH store theme: blue and white */
+:root {
+  --pt-blue-900: #0b2a6f;
+  --pt-blue-700: #1347b8;
+  --pt-blue-600: #1a5be0;   /* primary */
+  --pt-blue-500: #2f74f5;
+  --pt-blue-100: #e6efff;
+  --pt-blue-50:  #f3f7ff;
+  --pt-white:    #ffffff;
+  --pt-text:     #14213d;
+  --pt-muted:    #6b7a99;
+  --pt-border:   #dbe4f5;
+  --pt-radius:   12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pt-white: #0f1a33; --pt-blue-50: #14213d; --pt-blue-100: #1b2c52;
+    --pt-text: #eaf0ff; --pt-muted: #9fb0d4; --pt-border: #25365f;
+  }
+}
+body { background: var(--pt-blue-50); color: var(--pt-text); font-family: system-ui, sans-serif; }
+.btn-primary { background: var(--pt-blue-600); color: #fff; border: 0; border-radius: var(--pt-radius); padding: 12px 18px; font-weight: 600; }
+.btn-primary:hover { background: var(--pt-blue-700); }
+.card { background: var(--pt-white); border: 1px solid var(--pt-border); border-radius: var(--pt-radius); }
+.badge-discount { background: var(--pt-blue-100); color: var(--pt-blue-700); border-radius: 6px; padding: 2px 6px; font-size: 12px; font-weight: 700; }

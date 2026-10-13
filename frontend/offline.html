@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<title>You are offline | PRUDENT TECH Store</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; text-align: center;
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f3f7ff; color: #14213d; }
+  .card { max-width: 380px; }
+  .logo { width: 84px; height: 84px; border-radius: 22px; margin-bottom: 18px; }
+  h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.01em; }
+  p { margin: 0 0 20px; line-height: 1.55; color: #4a5878; }
+  button, a.btn { display: inline-block; border: 0; border-radius: 12px; background: #1a5be0; color: #fff; padding: 13px 22px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+  a.link { display: block; margin-top: 14px; color: #1a5be0; font-weight: 700; text-decoration: none; }
+  @media (prefers-color-scheme: dark) { body { background: #0f1a33; color: #eaf0ff; } p { color: #9fb0d4; } }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="icons/icon-192.png" alt="">
+    <h1>You are offline</h1>
+    <p>We could not reach the store. Check your internet connection and try again. Pages you opened before may still open from your phone.</p>
+    <button onclick="location.reload()">Try again</button>
+    <a class="link" href="/">Go to the home page</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a5be0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRUDENT TECH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Checkout | PRUDENT TECH Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+<main class="wrap" id="page"><div class="empty">Loading your cart…</div></main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="pwa.js"></script>
+<script>
+mountChrome("");
+if (!Auth.isIn()) location.replace("login.html?next=checkout.html");
+
+let cart, addrs = [], couponCode = null, quote = null;
+
+function selectedAddress() { const r = document.querySelector("input[name=addr]:checked"); return r ? addrs.find((a) => a.id === +r.value) : null; }
+
+async function refreshQuote() {
+  const a = selectedAddress();
+  const errBox = $("#couponMsg");
+  try {
+    quote = await api("/checkout/quote", { method: "POST", body: { region: a ? a.region : null, coupon_code: couponCode } });
+    if (couponCode) { errBox.className = "form-msg ok"; errBox.textContent = `Coupon ${quote.coupon_code} applied`; }
+  } catch (e) {
+    if (couponCode) { errBox.className = "form-msg err"; errBox.textContent = e.message; couponCode = null; return refreshQuote(); }
+    quote = null;
+  }
+  renderSummary();
+}
+
+function renderSummary() {
+  const a = selectedAddress();
+  const q = quote || { subtotal: cart.subtotal, delivery_fee: 0, discount: 0, total: cart.subtotal };
+  $("#sum").innerHTML = `
+    <div class="sum-row"><span>Subtotal (${cart.count} item${cart.count === 1 ? "" : "s"})</span><span>${money(q.subtotal)}</span></div>
+    ${+q.discount ? `<div class="sum-row disc"><span>Coupon discount</span><span>-${money(q.discount)}</span></div>` : ""}
+    <div class="sum-row"><span>Delivery${a ? " to " + esc(a.region) : ""}</span><span>${a ? money(q.delivery_fee) : "Choose an address"}</span></div>
+    <div class="sum-row total"><span>Total</span><span>${money(q.total)}</span></div>`;
+}
+
+function render() {
+  const unavailable = cart.items.filter((i) => !i.available);
+  const page = $("#page");
+  if (!cart.items.length) {
+    page.innerHTML = '<div class="empty">Your cart is empty.<br><a class="link-btn" href="index.html">Browse products</a></div>';
+    return;
+  }
+  page.innerHTML = `
+  <div class="co">
+    <div class="stack">
+      <div class="info-card">
+        <h2>Your items</h2>
+        ${unavailable.length ? `<div class="warn">Some items are out of stock. Remove them to continue.</div>` : ""}
+        ${cart.items.map((i) => `
+          <div class="line">
+            <div class="thumb">${i.thumbnail ? `<img src="${esc(i.thumbnail)}" alt="">` : initials(i.name)}</div>
+            <div class="grow"><a href="product.html?slug=${encodeURIComponent(i.slug)}">${esc(i.name)}</a>
+              <div class="meta" style="margin:2px 0 0">${i.available ? `Qty ${i.quantity} × ${money(i.price)}` : "Out of stock"}${i.available && i.quantity < i.stock ? "" : ""}</div></div>
+            <div><b>${money(i.line_total)}</b><br><button class="rm" style="padding:0" data-rm="${i.product_id}">Remove</button></div>
+          </div>`).join("")}
+      </div>
+
+      <div class="info-card">
+        <h2>Delivery address</h2>
+        ${addrs.length ? addrs.map((a, n) => `
+          <label class="opt"><input type="radio" name="addr" value="${a.id}" ${a.is_default || (n === 0 && !addrs.some((x) => x.is_default)) ? "checked" : ""}>
+            <span><b>${esc(a.full_name)}</b>${a.is_default ? '<span class="tag">Default</span>' : ""}<br>${esc(a.street)}, ${esc(a.city)}, ${esc(a.region)}<small>${esc(a.phone)}</small></span></label>`).join("")
+          : `<div class="warn">You have no delivery address yet.</div>`}
+        <a class="link-btn" href="account.html#addresses">${addrs.length ? "Add or change addresses" : "Add an address"}</a>
+      </div>
+
+      <div class="info-card">
+        <h2>Payment method</h2>
+        <label class="opt"><input type="radio" name="pay" value="paystack" checked><span><b>Mobile Money or card</b><small>Pay securely online with Paystack (MTN MoMo, Telecel Cash, AirtelTigo Money, Visa, Mastercard).</small></span></label>
+        <label class="opt"><input type="radio" name="pay" value="pay_on_delivery"><span><b>Pay on delivery</b><small>Pay in cash or Mobile Money when your order arrives.</small></span></label>
+      </div>
+    </div>
+
+    <div class="info-card summary">
+      <h2>Order summary</h2>
+      <div class="coupon"><input id="coupon" placeholder="Coupon code" aria-label="Coupon code" autocomplete="off"><button class="btn-outline" id="applyCoupon" type="button">Apply</button></div>
+      <div class="form-msg" id="couponMsg" role="status"></div>
+      <div id="sum"></div>
+      <div class="form-msg err" id="orderMsg" role="alert" style="margin-top:8px"></div>
+      <button class="btn-primary" id="place" style="width:100%;margin-top:6px">Place order</button>
+    </div>
+  </div>`;
+
+  document.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = async () => { await api("/cart/items/" + b.dataset.rm, { method: "PUT", body: { quantity: 0 } }); await load(); Cart.sync(); }));
+  document.querySelectorAll("input[name=addr]").forEach((r) => (r.onchange = refreshQuote));
+  $("#applyCoupon").onclick = () => { const v = $("#coupon").value.trim(); couponCode = v || null; $("#couponMsg").textContent = ""; refreshQuote(); };
+  $("#place").onclick = placeOrder;
+  refreshQuote();
+}
+
+async function placeOrder() {
+  const a = selectedAddress();
+  const msg = $("#orderMsg");
+  msg.textContent = "";
+  if (cart.items.some((i) => !i.available)) return (msg.textContent = "Remove out-of-stock items first.");
+  if (!a) return (msg.textContent = "Choose a delivery address.");
+  const btn = $("#place");
+  btn.disabled = true; btn.textContent = "Placing order…";
+  try {
+    const o = await api("/orders", { method: "POST", body: { address_id: a.id, payment_method: document.querySelector("input[name=pay]:checked").value, coupon_code: couponCode } });
+    Cart.save([]);
+    location.href = o.payment_url ? o.payment_url : "order.html?no=" + encodeURIComponent(o.order_no) + "&placed=1";
+  } catch (e) {
+    msg.textContent = e.message;
+    btn.disabled = false; btn.textContent = "Place order";
+    load();
+  }
+}
+
+async function load() {
+  try {
+    [cart, addrs] = await Promise.all([api("/cart"), api("/me/addresses")]);
+    render();
+  } catch (e) { $("#page").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+load();
+</script>
+</body>
+</html>
